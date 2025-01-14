@@ -42,7 +42,7 @@ async def media_handler(message: Message) -> None:
     description = f'Submitter: {message.from_user.full_name if message.from_user.username == "None" else "@" + message.from_user.username}'
 
     if message.from_user.id == ADMIN:
-        await message.reply(text='Please select option', reply_markup=inline_keyboard)
+        await message.reply(text='Please select option', reply_markup=inline_keyboard, disable_notification=True)
     else:
         if message.animation:
             await message.answer('Thank you for the GIF!')
@@ -50,6 +50,7 @@ async def media_handler(message: Message) -> None:
             await message.answer('Thank you for the picture!')
         elif message.video:
             await message.answer('Thank you for the video!')
+
         await message.copy_to(chat_id=ADMIN_CHANNEL, reply_markup=inline_keyboard, caption=description)
 
 
@@ -89,7 +90,7 @@ async def send_handler(callback: CallbackQuery) -> None:
 
 @router.message()
 async def default_handler(message: Message) -> None:
-    await message.answer('Please send me a picture, video or GIF')
+    await message.answer(text='Please send me a picture, video or GIF', disable_notification=True)
 
 
 async def on_startup(bot: Bot) -> None:

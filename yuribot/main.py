@@ -82,17 +82,27 @@ async def link_handler(message: Message) -> None:
                 for media_url in tweet_json['mediaURLs']:
                     with requests.get(media_url, stream=True) as media:
                         if 'https://video.twimg.com' in media_url:
-                            await message.bot.send_video(
-                                chat_id=ADMIN_CHANNEL if message.from_user.id != ADMIN else message.chat.id,
-                                video=BufferedInputFile(file=media.content, filename='video.mp4'),
-                                reply_markup=inline_keyboard,
-                                caption=description)
+                            if message.from_user.id == ADMIN:
+                                await message.reply_video(
+                                    video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                                    reply_markup=inline_keyboard)
+                            else:
+                                await message.bot.send_video(
+                                    chat_id=ADMIN_CHANNEL,
+                                    video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                                    reply_markup=inline_keyboard,
+                                    caption=description)
                         elif 'https://pbs.twimg.com' in media_url:
-                            await message.bot.send_photo(
-                                chat_id=ADMIN_CHANNEL if message.from_user.id != ADMIN else message.chat.id,
-                                photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                                reply_markup=inline_keyboard,
-                                caption=description)
+                            if message.from_user.id == ADMIN:
+                                await message.reply_photo(
+                                    photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                                    reply_markup=inline_keyboard)
+                            else:
+                                await message.bot.send_photo(
+                                    chat_id=ADMIN_CHANNEL,
+                                    photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                                    reply_markup=inline_keyboard,
+                                    caption=description)
                         else:
                             raise ValueError
         if message.from_user.id != ADMIN:

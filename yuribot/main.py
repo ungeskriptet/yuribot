@@ -1,15 +1,18 @@
 import configparser
+import json
 import logging
+import requests
 
 from aiohttp import web
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.utils.markdown import hbold
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from uuid import uuid4
+from urllib.parse import urlparse
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -39,17 +42,17 @@ inline_keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 @router.message(F.photo)
 @router.message(F.video)
 async def media_handler(message: Message) -> None:
-    description = f'Submitter: {message.from_user.full_name if message.from_user.username == "None" else "@" + message.from_user.username}'
+    description = f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}'
 
     if message.from_user.id == ADMIN:
         await message.reply(text='Please select option', reply_markup=inline_keyboard, disable_notification=True)
     else:
         if message.animation:
-            await message.answer('Thank you for the GIF!')
+            await message.answer(text='Thank you for the GIF!', disable_notification=True)
         elif message.photo:
-            await message.answer('Thank you for the picture!')
+            await message.answer(text='Thank you for the picture!', disable_notification=True)
         elif message.video:
-            await message.answer('Thank you for the video!')
+            await message.answer(text='Thank you for the video!', disable_notification=True)
 
         await message.copy_to(chat_id=ADMIN_CHANNEL, reply_markup=inline_keyboard, caption=description)
 
@@ -60,6 +63,39 @@ async def reject_handler(callback: CallbackQuery) -> None:
         if callback.message.reply_to_message:
             await callback.message.reply_to_message.delete()
         await callback.message.delete()
+
+
+@router.message(F.text.regexp(r'https://((girlcock)?x|(vx)?(fx)?twitter).com\S+'))
+async def link_handler(message: Message) -> None:
+    try:
+        description = (f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}\n'
+            f'Source: {message.text}')
+        tweet_id = urlparse(message.text).path.split('/')[-1]
+        with requests.get('https://api.vxtwitter.com/Twitter/status/' + tweet_id) as vxtwitter:
+            if 'Failed to scan your link!' in vxtwitter:
+                raise ValueError
+            else:
+                tweet_json = json.loads(vxtwitter.text)
+                for media_url in tweet_json['mediaURLs']:
+                    with requests.get(media_url, stream=True) as media:
+                        if 'https://video.twimg.com' in media_url:
+                            await message.bot.send_video(
+                                chat_id=ADMIN_CHANNEL if message.from_user.id != ADMIN else message.chat.id,
+                                video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                                reply_markup=inline_keyboard,
+                                caption=description)
+                        elif 'https://pbs.twimg.com' in media_url:
+                            await message.bot.send_photo(
+                                chat_id=ADMIN_CHANNEL if message.from_user.id != ADMIN else message.chat.id,
+                                photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                                reply_markup=inline_keyboard,
+                                caption=description)
+                        else:
+                            raise ValueError
+        if message.from_user.id != ADMIN:
+            await message.answer(text='Thank you for the link!', disable_notification=True)
+    except:
+        await message.answer(text='Invalid link', disable_notification=True)
 
 
 @router.callback_query()
@@ -90,7 +126,7 @@ async def send_handler(callback: CallbackQuery) -> None:
 
 @router.message()
 async def default_handler(message: Message) -> None:
-    await message.answer(text='Please send me a picture, video or GIF', disable_notification=True)
+    await message.answer(text='Please send me a picture, video, GIF or Twitter link', disable_notification=True)
 
 
 async def on_startup(bot: Bot) -> None:

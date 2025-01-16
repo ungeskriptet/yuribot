@@ -42,7 +42,10 @@ inline_keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 @router.message(F.photo)
 @router.message(F.video)
 async def media_handler(message: Message) -> None:
-    description = f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}'
+    try:
+        description = f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}'
+    except:
+        description = 'Unable to get user'
 
     if message.from_user.id == ADMIN:
         await message.reply(text='Please select option', reply_markup=inline_keyboard, disable_notification=True)

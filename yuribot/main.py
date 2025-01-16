@@ -79,32 +79,35 @@ async def link_handler(message: Message) -> None:
                 raise ValueError
             else:
                 tweet_json = json.loads(vxtwitter.text)
-                for media_url in tweet_json['mediaURLs']:
-                    with requests.get(media_url, stream=True) as media:
-                        if 'https://video.twimg.com' in media_url:
-                            if message.from_user.id == ADMIN:
-                                await message.reply_video(
-                                    video=BufferedInputFile(file=media.content, filename='video.mp4'),
-                                    reply_markup=inline_keyboard)
+                if tweet_json['mediaURLs']:
+                    for media_url in tweet_json['mediaURLs']:
+                        with requests.get(media_url, stream=True) as media:
+                            if 'https://video.twimg.com' in media_url:
+                                if message.from_user.id == ADMIN:
+                                    await message.reply_video(
+                                        video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                                        reply_markup=inline_keyboard)
+                                else:
+                                    await message.bot.send_video(
+                                        chat_id=ADMIN_CHANNEL,
+                                        video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                                        reply_markup=inline_keyboard,
+                                        caption=description)
+                            elif 'https://pbs.twimg.com' in media_url:
+                                if message.from_user.id == ADMIN:
+                                    await message.reply_photo(
+                                        photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                                        reply_markup=inline_keyboard)
+                                else:
+                                    await message.bot.send_photo(
+                                        chat_id=ADMIN_CHANNEL,
+                                        photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                                        reply_markup=inline_keyboard,
+                                        caption=description)
                             else:
-                                await message.bot.send_video(
-                                    chat_id=ADMIN_CHANNEL,
-                                    video=BufferedInputFile(file=media.content, filename='video.mp4'),
-                                    reply_markup=inline_keyboard,
-                                    caption=description)
-                        elif 'https://pbs.twimg.com' in media_url:
-                            if message.from_user.id == ADMIN:
-                                await message.reply_photo(
-                                    photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                                    reply_markup=inline_keyboard)
-                            else:
-                                await message.bot.send_photo(
-                                    chat_id=ADMIN_CHANNEL,
-                                    photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                                    reply_markup=inline_keyboard,
-                                    caption=description)
-                        else:
-                            raise ValueError
+                                raise ValueError
+                else:
+                    raise ValueError
         if message.from_user.id != ADMIN:
             await message.answer(text='Thank you for the link!', disable_notification=True)
     except:

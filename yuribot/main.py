@@ -115,11 +115,14 @@ async def link_handler(message: Message) -> None:
 async def send_handler(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
     chat_id = callback.message.chat.id
-    if callback.message.reply_to_message:
+
+    try:
         animation = callback.message.reply_to_message.animation
         photo = callback.message.reply_to_message.photo
         video = callback.message.reply_to_message.video
-    else:
+        if not any([animation, photo, video]):
+            raise ValueError
+    except:
         animation = callback.message.animation
         photo = callback.message.photo
         video = callback.message.video

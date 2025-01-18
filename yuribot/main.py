@@ -68,7 +68,7 @@ async def reject_handler(callback: CallbackQuery) -> None:
         await callback.message.delete()
 
 
-@router.message(F.text.regexp(r'https://((girlcock)?x|(vx)?(fx)?twitter).com\S+'))
+@router.message(F.text.regexp(r'https://((girlcock)?(fixup)?x|(vx)?(fx)?twitter).com\S+'))
 async def link_handler(message: Message) -> None:
     try:
         description = (f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}\n'

@@ -7,6 +7,7 @@ from aiohttp import web
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
+from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.utils.markdown import hbold
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
@@ -123,16 +124,28 @@ async def danbooru_handler(message: Message) -> None:
         with requests.get(f'https://danbooru.donmai.us/posts/{post}.json') as danbooru:
             danbooru_json = json.loads(danbooru.text)
             with requests.get(danbooru_json['file_url'], stream=True) as media:
-                if message.from_user.id == ADMIN:
-                    await message.reply_photo(
-                        photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                        reply_markup=inline_keyboard)
+                if urlparse(danbooru_json['file_url']).path[-4:] == '.mp4':
+                    if message.from_user.id == ADMIN:
+                        await message.reply_video(
+                            video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                            reply_markup=inline_keyboard)
+                    else:
+                        await message.bot.send_video(
+                            chat_id=ADMIN_CHANNEL,
+                            video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                            reply_markup=inline_keyboard,
+                            caption=description)
                 else:
-                    await message.bot.send_photo(
-                        chat_id=ADMIN_CHANNEL,
-                        photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                        reply_markup=inline_keyboard,
-                        caption=description)
+                    if message.from_user.id == ADMIN:
+                        await message.reply_photo(
+                            photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                            reply_markup=inline_keyboard)
+                    else:
+                        await message.bot.send_photo(
+                            chat_id=ADMIN_CHANNEL,
+                            photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                            reply_markup=inline_keyboard,
+                            caption=description)
     except:
         await message.reply('Invalid Danbooru link')
 

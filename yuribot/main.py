@@ -68,8 +68,8 @@ async def reject_handler(callback: CallbackQuery) -> None:
         await callback.message.delete()
 
 
-@router.message(F.text.regexp(r'https://((girlcock)?(fixup)?x|(vx)?(fx)?twitter).com\S+'))
-async def link_handler(message: Message) -> None:
+@router.message(F.text.regexp(r'https://((girlcock)?(fixup)?x|(vx)?(fx)?twitter).com/\S+'))
+async def twitter_handler(message: Message) -> None:
     try:
         description = (f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}\n'
             f'Source: {message.text}')
@@ -109,9 +109,32 @@ async def link_handler(message: Message) -> None:
                 else:
                     raise ValueError
         if message.from_user.id != ADMIN:
-            await message.answer(text='Thank you for the link!', disable_notification=True)
+            await message.reply(text='Thank you for the Twitter link!', disable_notification=True)
     except:
-        await message.answer(text='Invalid link', disable_notification=True)
+        await message.reply(text='Invalid Twitter link', disable_notification=True)
+
+
+@router.message(F.text.regexp(r'https://danbooru.donmai.us/posts/\S+'))
+async def danbooru_handler(message: Message) -> None:
+    try:
+        description = (f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}\n'
+            f'Source: {message.text}')
+        post = urlparse(message.text).path.split('/')[-1]
+        with requests.get(f'https://danbooru.donmai.us/posts/{post}.json') as danbooru:
+            danbooru_json = json.loads(danbooru.text)
+            with requests.get(danbooru_json['file_url'], stream=True) as media:
+                if message.from_user.id == ADMIN:
+                    await message.reply_photo(
+                        photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                        reply_markup=inline_keyboard)
+                else:
+                    await message.bot.send_photo(
+                        chat_id=ADMIN_CHANNEL,
+                        photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                        reply_markup=inline_keyboard,
+                        caption=description)
+    except:
+        await message.reply('Invalid Danbooru link')
 
 
 @router.callback_query()
@@ -145,7 +168,12 @@ async def send_handler(callback: CallbackQuery) -> None:
 
 @router.message()
 async def default_handler(message: Message) -> None:
-    await message.answer(text='Please send me a picture, video, GIF or Twitter link', disable_notification=True)
+    await message.answer(text='''Please send me one of the following:
+- Picture
+- Video
+- GIF
+- Twitter link
+- Danbooru link (danbooru.donmai.us)''', disable_notification=True)
 
 
 async def on_startup(bot: Bot) -> None:

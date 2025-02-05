@@ -31,13 +31,16 @@ WEBHOOK_SECRET = str(uuid4())
 
 router = Router()
 
-inline_keyboard = [
-	[InlineKeyboardButton(text='✅ Send', callback_data="send")],
-	[InlineKeyboardButton(text='⚠️ Send with spoiler', callback_data="send_spoiler")],
-    [InlineKeyboardButton(text='❌ Reject', callback_data="reject")],
-]
-inline_keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
+def keyboardbuilder(is_video: bool) -> InlineKeyboardMarkup:
+    inline_keyboard = [
+        [InlineKeyboardButton(text='✅ Send', callback_data='send')],
+        [InlineKeyboardButton(text='⚠️ Send with spoiler', callback_data='send_spoiler')],
+        [InlineKeyboardButton(text='❌ Reject', callback_data='reject')],
+    ]
+    if is_video:
+        inline_keyboard.append([InlineKeyboardButton(text='🔁 Convert to GIF', callback_data='gif')])
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 @router.message(F.animation)
 @router.message(F.photo)
@@ -49,7 +52,7 @@ async def media_handler(message: Message) -> None:
         description = 'Unable to get user'
 
     if message.from_user.id == ADMIN:
-        await message.reply(text='Please select option', reply_markup=inline_keyboard, disable_notification=True)
+        await message.reply(text='Please select option', reply_markup=keyboardbuilder(True if message.video else False), disable_notification=True)
     else:
         if message.animation:
             await message.answer(text='Thank you for the GIF!', disable_notification=True)
@@ -58,7 +61,32 @@ async def media_handler(message: Message) -> None:
         elif message.video:
             await message.answer(text='Thank you for the video!', disable_notification=True)
 
-        await message.copy_to(chat_id=ADMIN_CHANNEL, reply_markup=inline_keyboard, caption=description)
+        await message.copy_to(chat_id=ADMIN_CHANNEL, reply_markup=keyboardbuilder(True if message.video else False), caption=description)
+
+
+@router.callback_query(F.data == 'gif')
+async def gif_handler(callback: CallbackQuery) -> None:
+    try:
+        if callback.from_user.id == ADMIN:
+            if callback.message.reply_to_message:
+                message = callback.message.reply_to_message
+            else:
+                message = callback.message
+            video_id = message.video.file_id
+            fileinfo: File = await callback.bot.get_file(file_id=video_id)
+            if fileinfo.file_size > 10**8:
+                await message.reply(text='Video too big')
+                raise ValueError
+            else:
+                filedl: io.BytesIO = await callback.bot.download(video_id)
+                await message.reply_animation(
+                    animation=BufferedInputFile(file=filedl.read(), filename='video.gif'),
+                    reply_markup=keyboardbuilder(False))
+                await callback.message.delete()
+        else:
+            raise ValueError
+    except:
+        await message.reply(text='An error occured')
 
 
 @router.callback_query(F.data == 'reject')
@@ -69,7 +97,7 @@ async def reject_handler(callback: CallbackQuery) -> None:
         await callback.message.delete()
 
 
-@router.message(F.text.regexp(r'https://((girlcock)?(fixup)?x|(vx)?(fx)?twitter).com/\S+'))
+@router.message(F.text.regexp(r'https://((stupidpenis)?(girlcock)?(fixup)?x|(vx)?(fx)?twitter).com/\S+'))
 async def twitter_handler(message: Message) -> None:
     try:
         description = (f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}\n'
@@ -87,23 +115,23 @@ async def twitter_handler(message: Message) -> None:
                                 if message.from_user.id == ADMIN:
                                     await message.reply_video(
                                         video=BufferedInputFile(file=media.content, filename='video.mp4'),
-                                        reply_markup=inline_keyboard)
+                                        reply_markup=keyboardbuilder(True))
                                 else:
                                     await message.bot.send_video(
                                         chat_id=ADMIN_CHANNEL,
                                         video=BufferedInputFile(file=media.content, filename='video.mp4'),
-                                        reply_markup=inline_keyboard,
+                                        reply_markup=keyboardbuilder(True),
                                         caption=description)
                             elif 'https://pbs.twimg.com' in media_url:
                                 if message.from_user.id == ADMIN:
                                     await message.reply_photo(
                                         photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                                        reply_markup=inline_keyboard)
+                                        reply_markup=keyboardbuilder(False))
                                 else:
                                     await message.bot.send_photo(
                                         chat_id=ADMIN_CHANNEL,
                                         photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                                        reply_markup=inline_keyboard,
+                                        reply_markup=keyboardbuilder(False),
                                         caption=description)
                             else:
                                 raise ValueError
@@ -128,23 +156,23 @@ async def danbooru_handler(message: Message) -> None:
                     if message.from_user.id == ADMIN:
                         await message.reply_video(
                             video=BufferedInputFile(file=media.content, filename='video.mp4'),
-                            reply_markup=inline_keyboard)
+                            reply_markup=keyboardbuilder(True))
                     else:
                         await message.bot.send_video(
                             chat_id=ADMIN_CHANNEL,
                             video=BufferedInputFile(file=media.content, filename='video.mp4'),
-                            reply_markup=inline_keyboard,
+                            reply_markup=keyboardbuilder(True),
                             caption=description)
                 else:
                     if message.from_user.id == ADMIN:
                         await message.reply_photo(
                             photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                            reply_markup=inline_keyboard)
+                            reply_markup=keyboardbuilder(False))
                     else:
                         await message.bot.send_photo(
                             chat_id=ADMIN_CHANNEL,
                             photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
-                            reply_markup=inline_keyboard,
+                            reply_markup=keyboardbuilder(False),
                             caption=description)
     except:
         await message.reply('Invalid Danbooru link')

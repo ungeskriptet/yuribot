@@ -1,6 +1,7 @@
 import configparser
 import json
 import logging
+import os
 import requests
 
 from aiohttp import web
@@ -8,12 +9,14 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from aiogram.utils.markdown import hbold
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from uuid import uuid4
 from urllib.parse import urlparse
+
+from yuribot.gifconvert import convert_gif
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -42,6 +45,7 @@ def keyboardbuilder(is_video: bool) -> InlineKeyboardMarkup:
         inline_keyboard.append([InlineKeyboardButton(text='🔁 Convert to GIF', callback_data='gif')])
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
+
 @router.message(F.animation)
 @router.message(F.photo)
 @router.message(F.video)
@@ -68,20 +72,31 @@ async def media_handler(message: Message) -> None:
 async def gif_handler(callback: CallbackQuery) -> None:
     try:
         if callback.from_user.id == ADMIN:
-            if callback.message.reply_to_message:
-                message = callback.message.reply_to_message
-            else:
+            if callback.message.video:
                 message = callback.message
+            else:
+                message = callback.message.reply_to_message
             video_id = message.video.file_id
-            fileinfo: File = await callback.bot.get_file(file_id=video_id)
+            fileinfo = await callback.bot.get_file(file_id=video_id)
             if fileinfo.file_size > 10**8:
                 await message.reply(text='Video too big')
                 raise ValueError
             else:
-                filedl: io.BytesIO = await callback.bot.download(video_id)
+                os.makedirs(name='temp', exist_ok=True)
+                try:
+                    os.remove('temp/animation.gif')
+                    os.remove('temp/video.mp4')
+                except:
+                    pass
+                await callback.bot.download(file=video_id, destination='temp/video.mp4')
                 await message.reply_animation(
-                    animation=BufferedInputFile(file=filedl.read(), filename='video.gif'),
+                    animation=FSInputFile(path=convert_gif(), filename='animation.gif'),
                     reply_markup=keyboardbuilder(False))
+                try:
+                    os.remove('temp/animation.gif')
+                    os.remove('temp/video.mp4')
+                except:
+                    pass
                 await callback.message.delete()
         else:
             raise ValueError

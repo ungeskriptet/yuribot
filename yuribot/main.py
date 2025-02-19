@@ -13,6 +13,8 @@ from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, InlineK
 from aiogram.utils.markdown import hbold
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
+from bs4 import BeautifulSoup
+
 from uuid import uuid4
 from urllib.parse import urlparse
 
@@ -46,14 +48,20 @@ def keyboardbuilder(is_video: bool, is_admin: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
+def descriptionbuilder(message: Message) -> str:
+    try:
+        desc = (f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}\n'
+            f'Source: {"Telegram" if message.text == None else message.text}')
+    except:
+        desc = 'Unable to get user'
+    return desc
+
+
 @router.message(F.animation)
 @router.message(F.photo)
 @router.message(F.video)
 async def media_handler(message: Message) -> None:
-    try:
-        description = f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}'
-    except:
-        description = 'Unable to get user'
+    description = descriptionbuilder(message)
 
     if message.from_user.id == ADMIN:
         await message.reply(text='Please select option', reply_markup=keyboardbuilder(True if message.video else False, True), disable_notification=True)
@@ -103,16 +111,17 @@ async def gif_handler(callback: CallbackQuery) -> None:
 
 @router.callback_query(F.data == 'reject', F.from_user.id == ADMIN)
 async def reject_handler(callback: CallbackQuery) -> None:
-    if callback.message.reply_to_message:
+    try:
         await callback.message.reply_to_message.delete()
-    await callback.message.delete()
+        await callback.message.delete()
+    except:
+        pass
 
 
 @router.message(F.text.regexp(r'https://((stupidpenis)?(girlcock)?(fixup)?x|(vx)?(fx)?twitter).com/\S+'))
 async def twitter_handler(message: Message) -> None:
     try:
-        description = (f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}\n'
-            f'Source: {message.text}')
+        description = descriptionbuilder(message)
         tweet_id = urlparse(message.text).path.split('/')[-1]
         with requests.get('https://api.vxtwitter.com/Twitter/status/' + tweet_id) as vxtwitter:
             if 'Failed to scan your link!' in vxtwitter:
@@ -152,13 +161,13 @@ async def twitter_handler(message: Message) -> None:
             await message.reply(text='Thank you for the Twitter link!', disable_notification=True)
     except:
         await message.reply(text='Invalid Twitter link', disable_notification=True)
+        await message.forward(chat_id=ADMIN_CHANNEL)
 
 
 @router.message(F.text.regexp(r'https://danbooru.donmai.us/posts/\S+'))
 async def danbooru_handler(message: Message) -> None:
     try:
-        description = (f'Submitter: {message.from_user.full_name if message.from_user.username == None else "@" + message.from_user.username}\n'
-            f'Source: {message.text}')
+        description = descriptionbuilder(message)
         post = urlparse(message.text).path.split('/')[-1]
         with requests.get(f'https://danbooru.donmai.us/posts/{post}.json') as danbooru:
             danbooru_json = json.loads(danbooru.text)
@@ -185,8 +194,11 @@ async def danbooru_handler(message: Message) -> None:
                             photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
                             reply_markup=keyboardbuilder(False, False),
                             caption=description)
+        if message.from_user.id != ADMIN:
+            await message.reply(text='Thank you for the Danbooru link!', disable_notification=True)
     except:
         await message.reply('Invalid Danbooru link')
+        await message.forward(chat_id=ADMIN_CHANNEL)
 
 
 @router.callback_query(F.from_user.id == ADMIN)
@@ -239,6 +251,47 @@ async def send_handler(callback: CallbackQuery) -> None:
     await callback.message.delete()
 
 
+@router.message(F.text.regexp(r'^https://.+/.+'))
+async def opengraph_handler(message: Message) -> None:
+    try:
+        description = descriptionbuilder(message)
+        og = requests.get(message.text)
+        soup = BeautifulSoup(og.text, 'html.parser')
+        try:
+            url = soup.find('meta', property='og:video')['content']
+            is_video = True
+        except:
+            url = soup.find('meta', property='og:image')['content']
+            is_video = False
+        with requests.get(url=url, stream=True) as media:
+            if is_video:
+                if message.from_user.id == ADMIN:
+                    await message.reply_video(
+                        video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                        reply_markup=keyboardbuilder(True, True))
+                else:
+                    await message.bot.send_video(
+                        chat_id=ADMIN_CHANNEL,
+                        video=BufferedInputFile(file=media.content, filename='video.mp4'),
+                        reply_markup=keyboardbuilder(True, False),
+                        caption=description)
+            else:
+                if message.from_user.id == ADMIN:
+                    await message.reply_photo(
+                        photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                        reply_markup=keyboardbuilder(False, True))
+                else:
+                    await message.bot.send_photo(
+                        chat_id=ADMIN_CHANNEL,
+                        photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
+                        reply_markup=keyboardbuilder(False, False),
+                        caption=description)
+        if message.from_user.id != ADMIN:
+            await message.reply(text='Thank you for the link!', disable_notification=True)
+    except:
+        await message.reply('Invalid link')
+        await message.forward(chat_id=ADMIN_CHANNEL)
+
 @router.message()
 async def default_handler(message: Message) -> None:
     await message.answer(text='''Please send me one of the following:
@@ -246,7 +299,8 @@ async def default_handler(message: Message) -> None:
 - Video
 - GIF
 - Twitter link
-- Danbooru link (danbooru.donmai.us)''', disable_notification=True)
+- Danbooru link (danbooru.donmai.us)
+- Open Graph link (e.g. Mastodon)''', disable_notification=True)
     if message.text != '/start':
         await message.forward(chat_id=ADMIN_CHANNEL)
 

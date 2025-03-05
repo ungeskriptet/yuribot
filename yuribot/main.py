@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, CallbackQuery, FSInputFile, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from aiogram.utils.markdown import hbold
+from aiogram.utils.media_group import MediaGroupBuilder
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from bs4 import BeautifulSoup
@@ -34,6 +34,7 @@ WEB_SERVER_PORT = config['SERVER'].getint('PORT')
 WEBHOOK_PATH = config['SERVER']['WEBHOOK_PATH']
 WEBHOOK_SECRET = str(uuid4())
 
+media_album = {}
 router = Router()
 
 
@@ -79,10 +80,10 @@ async def media_handler(message: Message) -> None:
 @router.callback_query(F.data == 'gif', F.from_user.id == ADMIN)
 async def gif_handler(callback: CallbackQuery) -> None:
     try:
-        if callback.message.video:
-            message = callback.message
-        else:
+        if callback.message.reply_to_message:
             message = callback.message.reply_to_message
+        else:
+            message = callback.message
         video_id = message.video.file_id
         fileinfo = await callback.bot.get_file(file_id=video_id)
         if fileinfo.file_size > 10**8:
@@ -105,17 +106,35 @@ async def gif_handler(callback: CallbackQuery) -> None:
             except:
                 pass
             await callback.message.delete()
-    except:
-        await message.reply(text='An error occured')
+    except Exception as e:
+        await message.reply(text=str(e))
 
 
 @router.callback_query(F.data == 'reject', F.from_user.id == ADMIN)
-async def reject_handler(callback: CallbackQuery) -> None:
+async def reject_handler(callback: CallbackQuery | Message) -> None:
     try:
-        await callback.message.reply_to_message.delete()
-        await callback.message.delete()
-    except:
-        pass
+        if type(callback) == CallbackQuery:
+            msg = callback.message
+        else:
+            msg = callback
+        try:
+            msg_id = msg.reply_to_message.message_id
+        except:
+            msg_id = msg.message_id
+        if msg_id in media_album.keys():
+            for item in media_album[msg_id][1]:
+                await item.delete()
+            await media_album[msg_id][1][0].reply_to_message.delete()
+            await msg.delete()
+            del media_album[msg_id]
+        else:
+            try:
+                await msg.reply_to_message.delete()
+            except:
+                pass
+        await msg.delete()
+    except Exception as e:
+        msg.reply(str(e))
 
 
 @router.message(F.text.regexp(r'https://((stupidpenis)?(girlcock)?(fixup)?x|(vx)?(fx)?twitter).com/\S+'))
@@ -129,9 +148,27 @@ async def twitter_handler(message: Message) -> None:
             else:
                 tweet_json = json.loads(vxtwitter.text)
                 if tweet_json['mediaURLs']:
-                    for media_url in tweet_json['mediaURLs']:
-                        with requests.get(media_url, stream=True) as media:
-                            if 'https://video.twimg.com' in media_url:
+                    if len(tweet_json['mediaURLs']) > 1:
+                        media_group = MediaGroupBuilder(caption=None if message.from_user.id == ADMIN else f'Subscriber\'s <a href="tg://user?id={str(message.bot.id)}">submission</a>')
+                        for media_url in tweet_json['mediaURLs']:
+                            with requests.get(media_url, stream=True) as media:
+                                if 'https://video.twimg.com' in media_url:
+                                    media_group.add_video(media=BufferedInputFile(file=media.content, filename='video.mp4'))
+                                elif 'https://pbs.twimg.com' in media_url:
+                                    media_group.add_photo(media=BufferedInputFile(file=media.content, filename='photo.jpg'))
+                                else:
+                                    raise ValueError
+                        if message.from_user.id == ADMIN:
+                            album = await message.reply_media_group(media=media_group.build())
+                            await album[0].reply(text='Please select option', reply_markup=keyboardbuilder(False, True), disable_notification=True)
+                            media_album[album[0].message_id] = (media_group, album)
+                        else:
+                            album = await message.bot.send_media_group(chat_id=ADMIN_CHANNEL, media=media_group.build())
+                            await album[0].reply(text='Please select option', reply_markup=keyboardbuilder(False, False), disable_notification=True)
+                            media_album[album[0].message_id] = (media_group, album)
+                    else:
+                        with requests.get(tweet_json['mediaURLs'][0]) as media:
+                            if 'https://video.twimg.com' in tweet_json['mediaURLs'][0]:
                                 if message.from_user.id == ADMIN:
                                     await message.reply_video(
                                         video=BufferedInputFile(file=media.content, filename='video.mp4'),
@@ -142,7 +179,7 @@ async def twitter_handler(message: Message) -> None:
                                         video=BufferedInputFile(file=media.content, filename='video.mp4'),
                                         reply_markup=keyboardbuilder(True, False),
                                         caption=description)
-                            elif 'https://pbs.twimg.com' in media_url:
+                            elif 'https://pbs.twimg.com' in tweet_json['mediaURLs'][0]:
                                 if message.from_user.id == ADMIN:
                                     await message.reply_photo(
                                         photo=BufferedInputFile(file=media.content, filename='photo.jpg'),
@@ -159,9 +196,13 @@ async def twitter_handler(message: Message) -> None:
                     raise ValueError
         if message.from_user.id != ADMIN:
             await message.reply(text='Thank you for the Twitter link!', disable_notification=True)
-    except:
-        await message.reply(text='Invalid Twitter link', disable_notification=True)
-        await message.forward(chat_id=ADMIN_CHANNEL)
+    except Exception as e:
+        if message.from_user.id != ADMIN:
+            await message.reply(text='Invalid Twitter link', disable_notification=True)
+            msg = await message.forward(chat_id=ADMIN_CHANNEL)
+            await msg.reply(text=str(e))
+        else:
+            await message.reply(text=str(e))
 
 
 @router.message(F.text.regexp(r'https://danbooru.donmai.us/posts/\S+'))
@@ -198,7 +239,8 @@ async def danbooru_handler(message: Message) -> None:
             await message.reply(text='Thank you for the Danbooru link!', disable_notification=True)
     except:
         await message.reply('Invalid Danbooru link')
-        await message.forward(chat_id=ADMIN_CHANNEL)
+        if message.from_user.id != ADMIN:
+            await message.forward(chat_id=ADMIN_CHANNEL)
 
 
 @router.callback_query(F.from_user.id == ADMIN)
@@ -210,12 +252,14 @@ async def send_handler(callback: CallbackQuery) -> None:
         animation = callback.message.reply_to_message.animation
         photo = callback.message.reply_to_message.photo
         video = callback.message.reply_to_message.video
-        if not any([animation, photo, video]):
+        media_group_id = callback.message.reply_to_message.media_group_id
+        if not any([animation, photo, video, media_group_id]):
             raise ValueError
     except:
         animation = callback.message.animation
         photo = callback.message.photo
         video = callback.message.video
+        media_group_id = callback.message.media_group_id
 
     if callback.data == 'send' or callback.data == 'send_spoiler':
         caption = f'Subscriber\'s <a href="tg://user?id={str(callback.message.bot.id)}">submission</a>'
@@ -227,7 +271,15 @@ async def send_handler(callback: CallbackQuery) -> None:
     else:
         spoiler = False
 
-    if animation:
+    if media_group_id:
+        try:
+            msg_id = callback.message.reply_to_message.message_id
+        except:
+            msg_id = callback.message.message_id
+        await callback.bot.send_media_group(
+            chat_id=CHANNEL,
+            media=media_album[msg_id][0].build())
+    elif animation:
         await callback.bot.send_animation(
             chat_id=CHANNEL,
             animation=animation.file_id,
@@ -246,9 +298,7 @@ async def send_handler(callback: CallbackQuery) -> None:
             has_spoiler=spoiler,
             caption=caption)
 
-    if callback.message.reply_to_message:
-        await callback.message.reply_to_message.delete()
-    await callback.message.delete()
+    await reject_handler(callback)
 
 
 @router.message(F.text.regexp(r'^https://.+/.+'))
@@ -290,7 +340,8 @@ async def opengraph_handler(message: Message) -> None:
             await message.reply(text='Thank you for the link!', disable_notification=True)
     except:
         await message.reply('Invalid link')
-        await message.forward(chat_id=ADMIN_CHANNEL)
+        if message.from_user.id != ADMIN:
+            await message.forward(chat_id=ADMIN_CHANNEL)
 
 @router.message()
 async def default_handler(message: Message) -> None:
@@ -301,7 +352,7 @@ async def default_handler(message: Message) -> None:
 - Twitter link
 - Danbooru link (danbooru.donmai.us)
 - Open Graph link (e.g. Mastodon)''', disable_notification=True)
-    if message.text != '/start':
+    if message.text != '/start' and message.from_user.id != ADMIN:
         await message.forward(chat_id=ADMIN_CHANNEL)
 
 

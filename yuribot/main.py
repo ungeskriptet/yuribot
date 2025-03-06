@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 from uuid import uuid4
 from urllib.parse import urlparse
 
-from yuribot.gifconvert import convert_gif
+from yuribot.utils import convert_gif, download_link
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -243,6 +243,49 @@ async def danbooru_handler(message: Message) -> None:
             await message.forward(chat_id=ADMIN_CHANNEL)
 
 
+@router.message(F.text.regexp(r'https://(www.)?(dd)?instagram.com/\S+'))
+async def instagram_handler(message: Message) -> None:
+    try:
+        url = urlparse(message.text)
+        full_url = f'https://www.instagram.com{url.path}?{url.query}'
+
+        if url.path.split('/')[1] == 'reel':
+            os.makedirs(name='temp', exist_ok=True)
+            filename = download_link(full_url, 'temp')
+            inputfile = FSInputFile(path=f'{filename}', filename=filename.split('/')[-1])
+            if message.from_user.id == ADMIN:
+                await message.reply_video(
+                    video=inputfile,
+                    reply_markup=keyboardbuilder(True, True))
+            else:
+                await message.bot.send_video(
+                    chat_id=ADMIN_CHANNEL,
+                    video=inputfile,
+                    caption=descriptionbuilder(message),
+                    reply_markup=keyboardbuilder(True, False))
+            os.remove(f'{filename}')
+        elif url.path.split('/')[1] == 'p':
+            with requests.get(f'https://www.ddinstagram.com/images/{url.path.split("/")[2]}/1') as pic:
+                if message.from_user.id == ADMIN:
+                    await message.reply_photo(
+                        photo=BufferedInputFile(file=pic.content, filename='photo.jpg'),
+                        reply_markup=keyboardbuilder(False, True))
+                else:
+                    await message.bot.send_photo(
+                        chat_id=ADMIN_CHANNEL,
+                        photo=BufferedInputFile(file=pic.content, filename='photo.jpg'),
+                        reply_markup=keyboardbuilder(False, False),
+                        caption=descriptionbuilder(message))
+        if message.from_user.id != ADMIN:
+            await message.reply(text='Thank you for the Instagram link!', disable_notification=True)
+    except Exception as e:
+        if message.from_user.id != ADMIN:
+            await message.reply("Invalid Instagram link")
+            msg = await message.forward(chat_id=ADMIN_CHANNEL)
+            await msg.reply(str(e))
+        await message.reply(str(e))
+
+
 @router.callback_query(F.from_user.id == ADMIN)
 async def send_handler(callback: CallbackQuery) -> None:
     user_id = callback.from_user.id
@@ -349,9 +392,10 @@ async def default_handler(message: Message) -> None:
 - Picture
 - Video
 - GIF
-- Twitter link
+- Twitter link (Incl. Fixup links)
 - Danbooru link (danbooru.donmai.us)
-- Open Graph link (e.g. Mastodon)''', disable_notification=True)
+- Open Graph link (e.g. Mastodon)
+- Instagram link''', disable_notification=True)
     if message.text != '/start' and message.from_user.id != ADMIN:
         await message.forward(chat_id=ADMIN_CHANNEL)
 

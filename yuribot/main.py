@@ -15,6 +15,8 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 
 from bs4 import BeautifulSoup
 
+from asyncio import sleep
+
 from uuid import uuid4
 from urllib.parse import urlparse
 
@@ -283,72 +285,86 @@ async def instagram_handler(message: Message) -> None:
             await message.reply("Invalid Instagram link")
             msg = await message.forward(chat_id=ADMIN_CHANNEL)
             await msg.reply(str(e))
-        await message.reply(str(e))
+        else:
+            await message.reply(str(e))
 
 
 @router.callback_query(F.from_user.id == ADMIN)
 async def send_handler(callback: CallbackQuery) -> None:
-    user_id = callback.from_user.id
-    chat_id = callback.message.chat.id
-
     try:
-        animation = callback.message.reply_to_message.animation
-        photo = callback.message.reply_to_message.photo
-        video = callback.message.reply_to_message.video
-        media_group_id = callback.message.reply_to_message.media_group_id
-        if not any([animation, photo, video, media_group_id]):
-            raise ValueError
-    except:
-        animation = callback.message.animation
-        photo = callback.message.photo
-        video = callback.message.video
-        media_group_id = callback.message.media_group_id
+        user_id = callback.from_user.id
+        chat_id = callback.message.chat.id
 
-    if callback.data == 'send' or callback.data == 'send_spoiler':
-        caption = f'Subscriber\'s <a href="tg://user?id={str(callback.message.bot.id)}">submission</a>'
-    else:
-        caption = None
-
-    if callback.data == 'send_spoiler' or callback.data == 'send_spoiler_admin':
-        spoiler = True
-    else:
-        spoiler = False
-
-    if media_group_id:
         try:
-            msg_id = callback.message.reply_to_message.message_id
+            animation = callback.message.reply_to_message.animation
+            photo = callback.message.reply_to_message.photo
+            video = callback.message.reply_to_message.video
+            media_group_id = callback.message.reply_to_message.media_group_id
+            if not any([animation, photo, video, media_group_id]):
+                raise ValueError
         except:
-            msg_id = callback.message.message_id
-        await callback.bot.send_media_group(
-            chat_id=CHANNEL,
-            media=media_album[msg_id][0].build())
-    elif animation:
-        await callback.bot.send_animation(
-            chat_id=CHANNEL,
-            animation=animation.file_id,
-            has_spoiler=spoiler,
-            caption=caption)
-    elif photo:
-        await callback.bot.send_photo(
-            chat_id=CHANNEL,
-            photo=photo[0].file_id,
-            has_spoiler=spoiler,
-            caption=caption)
-    elif video:
-        await callback.bot.send_video(
-            chat_id=CHANNEL,
-            video=video.file_id,
-            has_spoiler=spoiler,
-            caption=caption)
+            animation = callback.message.animation
+            photo = callback.message.photo
+            video = callback.message.video
+            media_group_id = callback.message.media_group_id
 
-    await reject_handler(callback)
+        if callback.data == 'send' or callback.data == 'send_spoiler':
+            caption = f'Subscriber\'s <a href="tg://user?id={str(callback.message.bot.id)}">submission</a>'
+        else:
+            caption = None
+
+        if callback.data == 'send_spoiler' or callback.data == 'send_spoiler_admin':
+            spoiler = True
+        else:
+            spoiler = False
+
+        await reject_handler(callback)
+
+        if media_group_id:
+            try:
+                msg_id = callback.message.reply_to_message.message_id
+            except:
+                msg_id = callback.message.message_id
+            if msg_id in media_album.keys():
+                await callback.bot.send_media_group(
+                    chat_id=CHANNEL,
+                    media=media_album[msg_id][0].build())
+            else:
+                raise ValueError(f'Message {msg_id} not found. Did the bot restart?')
+        elif animation:
+            await callback.bot.send_animation(
+                chat_id=CHANNEL,
+                animation=animation.file_id,
+                has_spoiler=spoiler,
+                caption=caption)
+        elif photo:
+            await callback.bot.send_photo(
+                chat_id=CHANNEL,
+                photo=photo[0].file_id,
+                has_spoiler=spoiler,
+                caption=caption)
+        elif video:
+            await callback.bot.send_video(
+                chat_id=CHANNEL,
+                video=video.file_id,
+                has_spoiler=spoiler,
+                caption=caption)
+
+    except Exception as e:
+        callback.message.reply(
+            text=str(e),
+            disable_notification=True)
 
 
 @router.message(F.text.regexp(r'^https://.+/.+'))
 async def opengraph_handler(message: Message) -> None:
     try:
+        if message.text.startswith('https://bsky.app/'):
+            source = message.text.replace('https://bsky.app/', 'https://bskyx.app/')
+        else:
+            source = message.text
         description = descriptionbuilder(message)
-        og = requests.get(message.text)
+        og = requests.get(source)
         soup = BeautifulSoup(og.text, 'html.parser')
         try:
             url = soup.find('meta', property='og:video')['content']
@@ -381,10 +397,13 @@ async def opengraph_handler(message: Message) -> None:
                         caption=description)
         if message.from_user.id != ADMIN:
             await message.reply(text='Thank you for the link!', disable_notification=True)
-    except:
-        await message.reply('Invalid link')
+    except Exception as e:
         if message.from_user.id != ADMIN:
-            await message.forward(chat_id=ADMIN_CHANNEL)
+            await message.reply('Invalid link')
+            msg = await message.forward(chat_id=ADMIN_CHANNEL)
+            await msg.reply(str(e))
+        else:
+            await message.reply(str(e))
 
 @router.message()
 async def default_handler(message: Message) -> None:
@@ -395,7 +414,8 @@ async def default_handler(message: Message) -> None:
 - Twitter link (Incl. Fixup links)
 - Danbooru link (danbooru.donmai.us)
 - Open Graph link (e.g. Mastodon)
-- Instagram link''', disable_notification=True)
+- Instagram link
+- Bluesky link (bsky.app)''', disable_notification=True)
     if message.text != '/start' and message.from_user.id != ADMIN:
         await message.forward(chat_id=ADMIN_CHANNEL)
 

@@ -16,11 +16,13 @@ def convert_gif() -> str:
 
     return 'temp/animation.gif'
 
+
 def progress_hook(hook) -> None:
     if hook['status'] == 'finished':
         url = hook['info_dict']['original_url']
         file = hook['info_dict']['_filename']
         filename[url] = file
+
 
 def download_link(url: str, path: str) -> str:
     ydl_opts = {
@@ -38,5 +40,7 @@ def download_link(url: str, path: str) -> str:
             ydl.download(url)
             if url in filename.keys():
                 return filename[url]
+            else:
+                raise ValueError('yt-dlp: No videos found')
     except Exception as e:
         raise ValueError(e)

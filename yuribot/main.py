@@ -17,6 +17,8 @@ from bs4 import BeautifulSoup
 
 from asyncio import sleep
 
+from time import sleep
+
 from uuid import uuid4
 from urllib.parse import urlparse
 
@@ -67,7 +69,10 @@ async def media_handler(message: Message) -> None:
     description = descriptionbuilder(message)
 
     if message.from_user.id == ADMIN:
-        await message.reply(text='Please select option', reply_markup=keyboardbuilder(True if message.video else False, True), disable_notification=True)
+        await message.reply(
+            text='Please select option',
+            reply_markup=keyboardbuilder(True if message.video else False, True),
+            disable_notification=True)
     else:
         if message.animation:
             await message.answer(text='Thank you for the GIF!', disable_notification=True)
@@ -76,15 +81,21 @@ async def media_handler(message: Message) -> None:
         elif message.video:
             await message.answer(text='Thank you for the video!', disable_notification=True)
 
-        await message.copy_to(chat_id=ADMIN_CHANNEL, reply_markup=keyboardbuilder(True if message.video else False, False), caption=description)
+        await message.copy_to(
+            chat_id=ADMIN_CHANNEL,
+            reply_markup=keyboardbuilder(True if message.video else False, False),
+            caption=description)
 
 
 @router.callback_query(F.data == 'gif', F.from_user.id == ADMIN)
 async def gif_handler(callback: CallbackQuery) -> None:
     try:
-        if callback.message.reply_to_message:
-            message = callback.message.reply_to_message
-        else:
+        try:
+            if callback.message.reply_to_message.video:
+                message = callback.message.reply_to_message
+            else:
+                raise ValueError
+        except:
             message = callback.message
         video_id = message.video.file_id
         fileinfo = await callback.bot.get_file(file_id=video_id)
@@ -126,8 +137,6 @@ async def reject_handler(callback: CallbackQuery | Message) -> None:
         if msg_id in media_album.keys():
             for item in media_album[msg_id][1]:
                 await item.delete()
-            await media_album[msg_id][1][0].reply_to_message.delete()
-            await msg.delete()
             del media_album[msg_id]
         else:
             try:
@@ -198,6 +207,7 @@ async def twitter_handler(message: Message) -> None:
                     raise ValueError
         if message.from_user.id != ADMIN:
             await message.reply(text='Thank you for the Twitter link!', disable_notification=True)
+            sleep(3)
     except Exception as e:
         if message.from_user.id != ADMIN:
             await message.reply(text='Invalid Twitter link', disable_notification=True)
@@ -239,10 +249,14 @@ async def danbooru_handler(message: Message) -> None:
                             caption=description)
         if message.from_user.id != ADMIN:
             await message.reply(text='Thank you for the Danbooru link!', disable_notification=True)
-    except:
-        await message.reply('Invalid Danbooru link')
+            sleep(3)
+    except Exception as e:
         if message.from_user.id != ADMIN:
-            await message.forward(chat_id=ADMIN_CHANNEL)
+            await message.reply(text='Invalid Danbooru link', disable_notification=True)
+            msg = await message.forward(chat_id=ADMIN_CHANNEL)
+            await msg.reply(text=str(e))
+        else:
+            await message.reply(text=str(e))
 
 
 @router.message(F.text.regexp(r'https://(www.)?(dd)?instagram.com/\S+'))
@@ -280,6 +294,7 @@ async def instagram_handler(message: Message) -> None:
                         caption=descriptionbuilder(message))
         if message.from_user.id != ADMIN:
             await message.reply(text='Thank you for the Instagram link!', disable_notification=True)
+            sleep(3)
     except Exception as e:
         if message.from_user.id != ADMIN:
             await message.reply("Invalid Instagram link")

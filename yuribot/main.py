@@ -148,7 +148,7 @@ async def reject_handler(callback: CallbackQuery | Message) -> None:
         msg.reply(str(e))
 
 
-@router.message(F.text.regexp(r'https://((stupidpenis)?(girlcock)?(fixup)?x|(vx)?(fx)?twitter).com/\S+'))
+@router.message(F.text.regexp(r'https://((skibidi)?(stupidpenis)?(girlcock)?(fixup)?x|(vx)?(fx)?twitter).com/\S+'))
 async def twitter_handler(message: Message) -> None:
     try:
         description = descriptionbuilder(message)

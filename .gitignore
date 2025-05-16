@@ -1,2 +1,5 @@
-config.ini
-__pycache__
+*
+!config.ini.example
+!pyproject.toml
+!requirements.txt
+!yuribot/

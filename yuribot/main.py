@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import requests
+import sys
 
 from aiohttp import web
 
@@ -25,7 +26,12 @@ from urllib.parse import urlparse
 from yuribot.utils import convert_gif, download_link
 
 config = configparser.ConfigParser()
-config.read('config.ini')
+try:
+    config.read(sys.argv[1])
+except Exception as e:
+    print(e)
+    print('Usage: yuribot <Path to config.ini>')
+    quit()
 
 ADMIN = config['TELEGRAM'].getint('ADMIN')
 ADMIN_CHANNEL = config['TELEGRAM'].getint('ADMIN_CHANNEL')

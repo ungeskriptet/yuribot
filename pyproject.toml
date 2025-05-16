@@ -1,0 +1,12 @@
+[project]
+name = "yuribot"
+version = "0.0.1"
+dependencies = [
+    "aiogram",
+    "beautifulsoup4",
+    "requests",
+    "yt_dlp",
+]
+
+[project.scripts]
+yuribot = "yuribot.__main__:entry"

@@ -1,4 +1,3 @@
-import configparser
 import json
 import logging
 import os
@@ -25,24 +24,20 @@ from urllib.parse import urlparse
 
 from yuribot.utils import convert_gif, download_link
 
-config = configparser.ConfigParser()
 try:
-    config.read(sys.argv[1])
+    ADMIN = int(os.environ['TG_ADMIN'])
+    ADMIN_CHANNEL = int(os.environ['TG_ADMIN_CHANNEL'])
+    CHANNEL = int(os.environ['TG_CHANNEL'])
+    TOKEN = str(os.environ['TG_TOKEN'])
+    BASE_WEBHOOK_URL = str(os.environ['TG_BASE_WEBHOOK_URL'])
+    WEB_SERVER_HOST = str(os.environ['TG_HOST'])
+    WEB_SERVER_PORT = int(os.environ['TG_PORT'])
+    WEBHOOK_PATH = str(os.environ['TG_WEBHOOK_PATH'])
+    WEBHOOK_SECRET = str(uuid4())
 except Exception as e:
     print(e)
-    print('Usage: yuribot <Path to config.ini>')
+    print('Please specify all environment variables')
     quit()
-
-ADMIN = config['TELEGRAM'].getint('ADMIN')
-ADMIN_CHANNEL = config['TELEGRAM'].getint('ADMIN_CHANNEL')
-CHANNEL = config['TELEGRAM'].getint('CHANNEL')
-TOKEN = config['TELEGRAM']['TOKEN']
-
-BASE_WEBHOOK_URL = config['SERVER']['BASE_WEBHOOK_URL']
-WEB_SERVER_HOST = config['SERVER']['HOST']
-WEB_SERVER_PORT = config['SERVER'].getint('PORT')
-WEBHOOK_PATH = config['SERVER']['WEBHOOK_PATH']
-WEBHOOK_SECRET = str(uuid4())
 
 media_album = {}
 router = Router()

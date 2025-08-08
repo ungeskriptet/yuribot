@@ -24,12 +24,13 @@ def progress_hook(hook) -> None:
         filename[url] = file
 
 
-def download_link(url: str, path: str) -> str:
+def download_link(url: str) -> str:
+    os.makedirs(name='temp', exist_ok=True)
     ydl_opts = {
         'progress_hooks': [progress_hook],
         'overwrites': True,
         'paths': {
-            'home': path
+            'home': 'temp'
         }
     }
     if os.path.exists('cookies.txt'):
@@ -37,6 +38,12 @@ def download_link(url: str, path: str) -> str:
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            size = info.get('filesize_approx')
+            if type(size) != int:
+                raise TypeError(f'yt-dlp: Invalid file size received, try submitting the video again')
+            if size > 512 * (2**20):
+                raise IOError(f'yt-dlp: Video too big: {round(size / 2**20, 2)} MiB (Max 512 MiB)')
             ydl.download(url)
             if url in filename.keys():
                 return filename[url]

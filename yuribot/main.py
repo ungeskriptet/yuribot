@@ -267,8 +267,7 @@ async def instagram_handler(message: Message) -> None:
         full_url = f'https://www.instagram.com{url.path}?{url.query}'
 
         if url.path.split('/')[1] == 'reel':
-            os.makedirs(name='temp', exist_ok=True)
-            filename = download_link(full_url, 'temp')
+            filename = download_link(full_url)
             inputfile = FSInputFile(path=f'{filename}', filename=filename.split('/')[-1])
             if message.from_user.id == ADMIN:
                 await message.reply_video(
@@ -334,8 +333,6 @@ async def send_handler(callback: CallbackQuery) -> None:
         else:
             spoiler = False
 
-        await reject_handler(callback)
-
         if media_group_id:
             try:
                 msg_id = callback.message.reply_to_message.message_id
@@ -366,10 +363,45 @@ async def send_handler(callback: CallbackQuery) -> None:
                 has_spoiler=spoiler,
                 caption=caption)
 
+        await reject_handler(callback)
+
     except Exception as e:
         callback.message.reply(
             text=str(e),
             disable_notification=True)
+
+
+@router.message(F.text.regexp(r'https://(www.)?youtube.com/\S+'))
+async def youtube_handler(message: Message) -> None:
+    try:
+        try:
+          filename = download_link(message.text)
+        except Exception as e:
+          await message.reply(str(e))
+          return
+        inputfile = FSInputFile(path=f'{filename}', filename=filename.split('/')[-1])
+
+        if message.from_user.id == ADMIN:
+            await message.reply_video(
+                video=inputfile,
+                reply_markup=keyboardbuilder(True, True))
+        else:
+            await message.bot.send_video(
+                chat_id=ADMIN_CHANNEL,
+                video=inputfile,
+                caption=descriptionbuilder(message),
+                reply_markup=keyboardbuilder(True, False))
+        os.remove(f'{filename}')
+        if message.from_user.id != ADMIN:
+            await message.reply(text='Thank you for the YouTube link!', disable_notification=True)
+            sleep(3)
+    except Exception as e:
+        if message.from_user.id != ADMIN:
+            await message.reply("Invalid YouTube link")
+            msg = await message.forward(chat_id=ADMIN_CHANNEL)
+            await msg.reply(str(e))
+        else:
+            await message.reply(str(e))
 
 
 @router.message(F.text.regexp(r'^https://.+/.+'))
